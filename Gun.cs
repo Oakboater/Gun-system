@@ -13,7 +13,7 @@ public class Gun : MonoBehaviour
 
     [Header("Fire Rate")]
     public float firerate = 10f;
-    private float nextTimeToFire = 0f;
+    private float nextTimeToFire = 0.1f;
 
     [Header("Ammo")]
     public int maxAmmo = 30;
@@ -21,12 +21,13 @@ public class Gun : MonoBehaviour
     public float reloadTime = 1.5f;
     private bool isReloading = false;
 
+
     [Header("Effects")]
     public ParticleSystem muzzleFlash; // Optional
     public GameObject impactEffect;    // Optional hit effect
 
     [Header("UI")]
-    public Text ammoText;
+    public string ammoText;
 
 
     void Start()
@@ -34,12 +35,14 @@ public class Gun : MonoBehaviour
     currentAmmo = maxAmmo;
     UpdateAmmoUI();
     }
-    
+
     void Update()
     {
         if (Input.GetButtonDown("Fire1"))
         {
+        if (currentAmmo >0)
             Shoot();
+            currentAmmo = currentAmmo - 1;
         }
     }
 
@@ -51,6 +54,7 @@ public class Gun : MonoBehaviour
         RaycastHit hit;
         if (Physics.Raycast(playerCamera.transform.position, playerCamera.transform.forward, out hit, range))
         {
+
             Health targetHealth = hit.transform.GetComponent<Health>();
             if (targetHealth != null)
             {
@@ -64,6 +68,14 @@ public class Gun : MonoBehaviour
                 GameObject impact = Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
                 Destroy(impact, 2f);
             }
+        }
+    }
+
+    void UpdateAmmoUI()
+    {
+        if (ammoText != null)
+        {
+             string ammoText = $"{currentAmmo} / {maxAmmo}";
         }
     }
 }
