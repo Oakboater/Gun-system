@@ -13,9 +13,9 @@ public class Gun : MonoBehaviour
     public bool canShoot = true;
 
 
-    [Header("Fire Rate")]
-    public float firerate = 10f;
-    private float nextTimeToFire = 0.1f;
+    [Header("Fire Rate (RPM)")]
+    public float firerate = 15f;
+    private float nextTimeToFire = 60f; // This is so we can make an rpm
 
     [Header("Ammo")]
     public int maxAmmo = 30;
@@ -40,17 +40,29 @@ public class Gun : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetButtonDown("Fire1") && canShoot == true)
+        if (Input.GetButton("Fire1") && canShoot == true)
         {
-            if (currentAmmo >0)
+            if (currentAmmo > 0)
                 Shoot();
+                canShoot = false;
                 currentAmmo = currentAmmo - 1;
                 UpdateAmmoUI();
+                StartCoroutine(Delay());
+
          if (currentAmmo <= 0)
          canShoot = false;
          StartReloading();
         }
     }
+
+    IEnumerator Delay()
+    {
+        yield return new WaitForSeconds(nextTimeToFire/firerate);
+        Debug.Log("off cd");
+        if (currentAmmo > 0)
+        canShoot = true;
+    }
+
 
     void Shoot()
     {
