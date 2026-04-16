@@ -40,12 +40,12 @@ public class Gun : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetButtonDown("Fire1"))
+        if (Input.GetButtonDown("Fire1") && canShoot == true)
         {
-        if (currentAmmo >0 && canShoot == true)
-            Shoot();
-            currentAmmo = currentAmmo - 1;
-            UpdateAmmoUI();
+            if (currentAmmo >0)
+                Shoot();
+                currentAmmo = currentAmmo - 1;
+                UpdateAmmoUI();
          if (currentAmmo <= 0)
          canShoot = false;
          StartReloading();
@@ -90,7 +90,7 @@ public class Gun : MonoBehaviour
 
         if (ammoText != null)
         {
-            ammoText.text = "Reloading...";
+            ammoText.text = $"Reloading {reloadTime}";
         }
 
         yield return new WaitForSeconds(reloadTime);
@@ -103,7 +103,7 @@ public class Gun : MonoBehaviour
 }
     void UpdateAmmoUI()
     {
-        if (ammoText != null && !isReloading == false)
+        if (ammoText != null)
         {
             ammoText.text = $"{currentAmmo} / {maxAmmo}";
         }
