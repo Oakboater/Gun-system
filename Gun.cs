@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
-
+using TMPro;
+using System.Collections;
 public class Gun : MonoBehaviour
 {
 
@@ -9,6 +10,7 @@ public class Gun : MonoBehaviour
     public float range = 100f;
     public Transform barrelEnd;
     public Camera playerCamera;
+    public bool canShoot = true;
 
 
     [Header("Fire Rate")]
@@ -27,7 +29,7 @@ public class Gun : MonoBehaviour
     public GameObject impactEffect;    // Optional hit effect
 
     [Header("UI")]
-    public string ammoText;
+    public TMP_Text ammoText;
 
 
     void Start()
@@ -40,9 +42,13 @@ public class Gun : MonoBehaviour
     {
         if (Input.GetButtonDown("Fire1"))
         {
-        if (currentAmmo >0)
+        if (currentAmmo >0 && canShoot == true)
             Shoot();
             currentAmmo = currentAmmo - 1;
+            UpdateAmmoUI();
+         if (currentAmmo <= 0)
+         canShoot = false;
+         StartReloading();
         }
     }
 
@@ -70,12 +76,37 @@ public class Gun : MonoBehaviour
             }
         }
     }
-
-    void UpdateAmmoUI()
+    public void StartReloading()
     {
+    if (!isReloading && currentAmmo <= 0)
+    {
+        StartCoroutine(Reloading());
+    }
+}
+    IEnumerator Reloading()
+    {
+        isReloading = true;
+        canShoot = false;
+
         if (ammoText != null)
         {
-             string ammoText = $"{currentAmmo} / {maxAmmo}";
+            ammoText.text = "Reloading...";
         }
+
+        yield return new WaitForSeconds(reloadTime);
+    
+        currentAmmo = maxAmmo;
+        canShoot = true;
+        isReloading = false;
+
+        UpdateAmmoUI();
+}
+    void UpdateAmmoUI()
+    {
+        if (ammoText != null && !isReloading == false)
+        {
+            ammoText.text = $"{currentAmmo} / {maxAmmo}";
+        }
+        
     }
 }
