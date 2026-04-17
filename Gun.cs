@@ -14,8 +14,9 @@
         public LayerMask hitLayers;
 
         [Header("Fire Rate (Per second)")]
-        public float firerate = 15f;
-    
+        public float firerate = 1000f;
+        private float nextTimeToFire = 0f;
+        
         [Header("Ammo")]
         public int maxAmmo = 30;
         public int currentAmmo;
@@ -37,25 +38,30 @@
         UpdateAmmoUI();
         }
 
+
+
         void Update()
         {
-            if (canShoot && Input.GetButton("Fire1"))
+            if (canShoot && Input.GetMouseButton(0) && Time.time >= nextTimeToFire)
             {
                 if (currentAmmo > 0)
                 {
                     Shoot();
-                    canShoot = false;
                     currentAmmo--;
                     UpdateAmmoUI();
-                    StartCoroutine(Delay());
+                    nextTimeToFire = Time.time + 1f / firerate; // Set next allowed shot time
                 }
-
-                if (currentAmmo <= 0)
+                else
                 {
-                    canShoot = false;
                     StartReloading();
                 }
             }
+
+            if (Input.GetKeyDown(KeyCode.R))
+            {
+                StartReloading();
+            }
+        }
 
          if (Input.GetKeyDown(KeyCode.R))
         {
@@ -65,21 +71,21 @@
         IEnumerator Delay()
         {
             yield return new WaitForSeconds(1f / firerate);
-            Debug.Log("off cd");
-            if (currentAmmo > 0)
             canShoot = true;
         }
 
 
-        void Shoot()
+            void Shoot()
         {
             if (muzzleFlash != null)
                 muzzleFlash.Play();
 
             RaycastHit hit;
+
+            Vector3 origin = playerCamera.transform.position;
             Vector3 direction = playerCamera.transform.forward;
 
-            if (Physics.Raycast(barrelEnd.position, direction, out hit, range, hitLayers))
+            if (Physics.Raycast(origin, direction, out hit, range, hitLayers))
             {
                 Debug.Log("Hit: " + hit.transform.name);
 
