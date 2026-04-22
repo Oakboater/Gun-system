@@ -14,7 +14,7 @@ public class Gun : MonoBehaviour
     public LayerMask hitLayers;
 
     [Header("Fire Rate (Per second)")]
-    public float firerate = 10f;  // Set to 10 shots per second (more reasonable for testing)
+    public float firerate = 1000f;
     private float nextTimeToFire = 0f;
 
     [Header("Ammo")]
@@ -38,20 +38,25 @@ public class Gun : MonoBehaviour
 
     void Update()
     {
-        if (canShoot && Input.GetMouseButton(0) && Time.time >= nextTimeToFire)
+        
+    if (canShoot && Input.GetMouseButton(0))
+    {
+        float timeBetweenShots = 1f / firerate;
+        nextTimeToFire -= Time.deltaTime;
+
+        while (nextTimeToFire <= 0f && currentAmmo > 0)
         {
-            if (currentAmmo > 0)
-            {
-                Shoot();
-                currentAmmo--;
-                UpdateAmmoUI();
-                nextTimeToFire = Time.time + 1f / firerate;  // Control rate of fire
-            }
-            else
-            {
-                StartReloading();
-            }
+            Shoot();
+            currentAmmo--;
+            UpdateAmmoUI();
+            nextTimeToFire += timeBetweenShots; // Schedule the next shot
         }
+
+        if (currentAmmo <= 0)
+        {
+            StartReloading();
+        }
+    }
 
         if (Input.GetKeyDown(KeyCode.R))
         {
