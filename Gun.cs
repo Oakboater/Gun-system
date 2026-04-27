@@ -1,129 +1,266 @@
 using UnityEngine;
-using UnityEngine.UI;
 using TMPro;
 using System.Collections;
 
 public class Gun : MonoBehaviour
 {
-    [Header("Shooting")]
+    public enum FireType { Auto, Semi, Shotgun }
+
+    [Header("Weapon Type")]
+    public FireType fireType;
+
+    [Header("Stats")]
     public float damage = 25f;
     public float range = 100f;
-    public Transform barrelEnd;
-    public Camera playerCamera;
-    public bool canShoot = true;
-    public LayerMask hitLayers;
+    public float fireRate = 10f;
 
-    [Header("Fire Rate (Per second)")]
-    public float firerate = 1000f;
-    private float nextTimeToFire = 0f;
+    [Header("Shotgun Settings")]
+    public PelletShape pelletShape = PelletShape.Cluster;
+    public int pelletCount = 8;
+    public float spreadSize = 0.06f;
+    public float innerSpread = 0.02f;
+    public float pelletRandomness = 0.01f;
+
+    public enum PelletShape
+    {
+        Cluster,
+        Cross,
+        Ring,
+        Horizontal,
+        Vertical,
+        DoubleCluster
+    }
+
+    [Header("Damage Falloff")]
+    public float falloffStart = 15f;
+    public float falloffRate = 1.2f;
+    public float minDamage = 5f;
 
     [Header("Ammo")]
     public int maxAmmo = 30;
     public int currentAmmo;
     public float reloadTime = 1.5f;
-    private bool isReloading = false;
 
-    [Header("Effects")]
-    public ParticleSystem muzzleFlash; // Optional
-    public GameObject impactEffect;    // Optional hit effect
-
-    [Header("UI")]
+    [Header("References")]
+    public Camera cam;
     public TMP_Text ammoText;
+    public GameObject impactEffect;
+
+    private float nextFireTime;
+    private bool reloading;
 
     void Start()
     {
         currentAmmo = maxAmmo;
-        UpdateAmmoUI();
+        UpdateUI();
     }
 
     void Update()
     {
-        
-    if (canShoot && Input.GetMouseButton(0))
-    {
-        float timeBetweenShots = 1f / firerate;
-        nextTimeToFire -= Time.deltaTime;
+        if (reloading) return;
 
-        while (nextTimeToFire <= 0f && currentAmmo > 0)
+        HandleInput();
+    }
+
+    void HandleInput()
+    {
+        switch (fireType)
         {
-            Shoot();
-            currentAmmo--;
-            UpdateAmmoUI();
-            nextTimeToFire += timeBetweenShots; // Schedule the next shot
+            case FireType.Auto:
+                if (Input.GetMouseButton(0))
+                    TryShoot();
+                break;
+
+            case FireType.Semi:
+            case FireType.Shotgun:
+                if (Input.GetMouseButtonDown(0))
+                    TryShoot();
+                break;
         }
+
+        if (Input.GetKeyDown(KeyCode.R))
+            StartCoroutine(Reload());
+    }
+
+    void TryShoot()
+    {
+        if (Time.time < nextFireTime) return;
 
         if (currentAmmo <= 0)
         {
-            StartReloading();
+            StartCoroutine(Reload());
+            return;
         }
-    }
 
-        if (Input.GetKeyDown(KeyCode.R))
+        currentAmmo--;
+        nextFireTime = Time.time + 1f / fireRate;
+
+        switch (fireType)
         {
-            StartReloading();
+            case FireType.Shotgun:
+                FireShotgun();
+                break;
+
+            default:
+                FireSingle();
+                break;
         }
+
+        UpdateUI();
     }
 
-    void Shoot()
+    void FireSingle()
     {
-        if (muzzleFlash != null)
-            muzzleFlash.Play();
+        ShootRay(cam.transform.forward);
+    }
 
-        RaycastHit hit;
+    void FireShotgun()
+    {
+        Vector2[] pattern = GeneratePattern();
 
-        Vector3 origin = playerCamera.transform.position;
-        Vector3 direction = playerCamera.transform.forward;
-
-        if (Physics.Raycast(origin, direction, out hit, range, hitLayers))
+        foreach (Vector2 p in pattern)
         {
-            Debug.Log("Hit: " + hit.transform.name);
+            Vector2 offset = p + Random.insideUnitCircle * pelletRandomness;
 
-            Health targetHealth = hit.transform.GetComponent<Health>();
-            if (targetHealth != null)
+            Vector3 dir =
+                cam.transform.forward +
+                cam.transform.right * offset.x +
+                cam.transform.up * offset.y;
+
+            ShootRay(dir.normalized);
+        }
+    }
+
+    Vector2[] GeneratePattern()
+    {
+        switch (pelletShape)
+        {
+            case PelletShape.Cross:
+                return new Vector2[]
+                {
+                    Vector2.zero,
+                    Vector2.right * spreadSize,
+                    Vector2.left * spreadSize,
+                    Vector2.up * spreadSize,
+                    Vector2.down * spreadSize
+                };
+
+            case PelletShape.Ring:
             {
-                targetHealth.TakeDamage(damage);
+                Vector2[] arr = new Vector2[pelletCount];
+
+                for (int i = 0; i < pelletCount; i++)
+                {
+                    float a = i * Mathf.PI * 2f / pelletCount;
+                    arr[i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * spreadSize;
+                }
+
+                return arr;
             }
+
+            case PelletShape.Horizontal:
+            {
+                Vector2[] arr = new Vector2[pelletCount];
+
+                for (int i = 0; i < pelletCount; i++)
+                {
+                    float t = (i / (float)(pelletCount - 1)) * 2f - 1f;
+                    arr[i] = new Vector2(t * spreadSize, 0);
+                }
+
+                return arr;
+            }
+
+            case PelletShape.Vertical:
+            {
+                Vector2[] arr = new Vector2[pelletCount];
+
+                for (int i = 0; i < pelletCount; i++)
+                {
+                    float t = (i / (float)(pelletCount - 1)) * 2f - 1f;
+                    arr[i] = new Vector2(0, t * spreadSize);
+                }
+
+                return arr;
+            }
+
+            case PelletShape.DoubleCluster:
+            {
+                Vector2[] arr = new Vector2[pelletCount];
+
+                for (int i = 0; i < pelletCount; i++)
+                {
+                    Vector2 center =
+                        (i % 2 == 0)
+                        ? Vector2.left * spreadSize
+                        : Vector2.right * spreadSize;
+
+                    arr[i] = center + Random.insideUnitCircle * innerSpread;
+                }
+
+                return arr;
+            }
+
+            default:
+            {
+                Vector2[] arr = new Vector2[pelletCount];
+
+                for (int i = 0; i < pelletCount; i++)
+                    arr[i] = Random.insideUnitCircle * spreadSize;
+
+                return arr;
+            }
+        }
+    }
+
+    void ShootRay(Vector3 dir)
+    {
+        if (Physics.Raycast(cam.transform.position, dir, out RaycastHit hit, range))
+        {
+            float dmg = CalculateDamage(hit.distance);
+
+            Health hp = hit.transform.GetComponent<Health>();
+            if (hp != null)
+                hp.TakeDamage(dmg);
 
             if (impactEffect != null)
             {
-                GameObject impact = Instantiate(impactEffect, hit.point, Quaternion.LookRotation(hit.normal));
-                Destroy(impact, 2f);
+                Instantiate(
+                    impactEffect,
+                    hit.point,
+                    Quaternion.LookRotation(hit.normal)
+                );
             }
         }
     }
 
-    void StartReloading()
+    float CalculateDamage(float distance)
     {
-        if (!isReloading && currentAmmo < maxAmmo)
-        {
-            StartCoroutine(Reloading());
-        }
+        if (distance <= falloffStart)
+            return damage;
+
+        float drop = (distance - falloffStart) * falloffRate;
+        return Mathf.Max(minDamage, damage - drop);
     }
 
-    IEnumerator Reloading()
+    IEnumerator Reload()
     {
-        isReloading = true;
-        canShoot = false;
+        reloading = true;
 
-        if (ammoText != null)
-        {
-            ammoText.text = $"Reloading {reloadTime}";
-        }
+        if (ammoText)
+            ammoText.text = "Reloading...";
 
         yield return new WaitForSeconds(reloadTime);
 
         currentAmmo = maxAmmo;
-        canShoot = true;
-        isReloading = false;
+        reloading = false;
 
-        UpdateAmmoUI();
+        UpdateUI();
     }
 
-    void UpdateAmmoUI()
+    void UpdateUI()
     {
-        if (ammoText != null)
-        {
+        if (ammoText)
             ammoText.text = $"{currentAmmo} / {maxAmmo}";
-        }
     }
 }
