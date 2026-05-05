@@ -1,58 +1,28 @@
 using UnityEngine;
-using TMPro;
 using System.Collections;
+using System.Collections.Generic;
 
 public class Gun : MonoBehaviour
 {
-    public enum FireType { Auto, Semi, Shotgun }
-
-    [Header("Weapon Type")]
-    public FireType fireType;
-
-    [Header("Stats")]
-    public float damage = 25f;
-    public float range = 100f;
-    public float fireRate = 10f;
-
-    [Header("Shotgun Settings")]
-    public PelletShape pelletShape = PelletShape.Cluster;
-    public int pelletCount = 8;
-    public float spreadSize = 0.06f;
-    public float innerSpread = 0.02f;
-    public float pelletRandomness = 0.01f;
-
-    public enum PelletShape
-    {
-        Cluster,
-        Cross,
-        Ring,
-        Horizontal,
-        Vertical,
-        DoubleCluster
-    }
-
-    [Header("Damage Falloff")]
-    public float falloffStart = 15f;
-    public float falloffRate = 1.2f;
-    public float minDamage = 5f;
-
-    [Header("Ammo")]
-    public int maxAmmo = 30;
-    public int currentAmmo;
-    public float reloadTime = 1.5f;
+    public WeaponData data;
 
     [Header("References")]
     public Camera cam;
-    public TMP_Text ammoText;
-    public GameObject impactEffect;
+    public Transform recoilPivot;
+    public ParticleSystem tracer;
 
-    private float nextFireTime;
-    private bool reloading;
+    int ammo;
+    float nextFire;
+    bool reloading;
 
-    void Start()
+    Vector2 recoil;
+    Vector2 recoilVel;
+
+    Dictionary<Transform, float> shotDamage = new();
+
+    void OnEnable()
     {
-        currentAmmo = maxAmmo;
-        UpdateUI();
+        ammo = data.magSize;
     }
 
     void Update()
@@ -60,207 +30,126 @@ public class Gun : MonoBehaviour
         if (reloading) return;
 
         HandleInput();
+        UpdateRecoil();
     }
 
     void HandleInput()
     {
-        switch (fireType)
-        {
-            case FireType.Auto:
-                if (Input.GetMouseButton(0))
-                    TryShoot();
-                break;
+        bool fire =
+            data.fireType == WeaponData.FireType.Auto
+            ? Input.GetMouseButton(0)
+            : Input.GetMouseButtonDown(0);
 
-            case FireType.Semi:
-            case FireType.Shotgun:
-                if (Input.GetMouseButtonDown(0))
-                    TryShoot();
-                break;
-        }
+        if (fire) TryShoot();
 
         if (Input.GetKeyDown(KeyCode.R))
             StartCoroutine(Reload());
     }
 
-    void TryShoot()
+    public void TryShoot()
     {
-        if (Time.time < nextFireTime) return;
+        if (Time.time < nextFire) return;
+        if (ammo <= 0) { StartCoroutine(Reload()); return; }
 
-        if (currentAmmo <= 0)
-        {
-            StartCoroutine(Reload());
-            return;
-        }
+        ammo--;
+        nextFire = Time.time + 1f / data.fireRate;
 
-        currentAmmo--;
-        nextFireTime = Time.time + 1f / fireRate;
+        recoil += new Vector2(
+            Random.Range(-data.recoilX, data.recoilX),
+            data.recoilY
+        );
 
-        switch (fireType)
-        {
-            case FireType.Shotgun:
-                FireShotgun();
-                break;
-
-            default:
-                FireSingle();
-                break;
-        }
-
-        UpdateUI();
+        if (data.fireType == WeaponData.FireType.Shotgun)
+            FireShotgun();
+        else
+            FireSingle();
     }
 
     void FireSingle()
     {
-        ShootRay(cam.transform.forward);
+        Shoot(cam.transform.forward);
     }
 
     void FireShotgun()
     {
-        Vector2[] pattern = GeneratePattern();
+        shotDamage.Clear();
 
-        foreach (Vector2 p in pattern)
+        for (int i = 0; i < data.pellets; i++)
         {
-            Vector2 offset = p + Random.insideUnitCircle * pelletRandomness;
+            Vector2 offset = Random.insideUnitCircle * data.spread;
 
             Vector3 dir =
                 cam.transform.forward +
                 cam.transform.right * offset.x +
                 cam.transform.up * offset.y;
 
-            ShootRay(dir.normalized);
+            Shoot(dir.normalized);
         }
     }
 
-    Vector2[] GeneratePattern()
+    void Shoot(Vector3 dir)
     {
-        switch (pelletShape)
+        Vector3 origin = cam.transform.position;
+
+        if (Physics.Raycast(origin, dir, out RaycastHit hit, data.range))
         {
-            case PelletShape.Cross:
-                return new Vector2[]
-                {
-                    Vector2.zero,
-                    Vector2.right * spreadSize,
-                    Vector2.left * spreadSize,
-                    Vector2.up * spreadSize,
-                    Vector2.down * spreadSize
-                };
+            SpawnTracer(origin, hit.point);
 
-            case PelletShape.Ring:
-            {
-                Vector2[] arr = new Vector2[pelletCount];
-
-                for (int i = 0; i < pelletCount; i++)
-                {
-                    float a = i * Mathf.PI * 2f / pelletCount;
-                    arr[i] = new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * spreadSize;
-                }
-
-                return arr;
-            }
-
-            case PelletShape.Horizontal:
-            {
-                Vector2[] arr = new Vector2[pelletCount];
-
-                for (int i = 0; i < pelletCount; i++)
-                {
-                    float t = (i / (float)(pelletCount - 1)) * 2f - 1f;
-                    arr[i] = new Vector2(t * spreadSize, 0);
-                }
-
-                return arr;
-            }
-
-            case PelletShape.Vertical:
-            {
-                Vector2[] arr = new Vector2[pelletCount];
-
-                for (int i = 0; i < pelletCount; i++)
-                {
-                    float t = (i / (float)(pelletCount - 1)) * 2f - 1f;
-                    arr[i] = new Vector2(0, t * spreadSize);
-                }
-
-                return arr;
-            }
-
-            case PelletShape.DoubleCluster:
-            {
-                Vector2[] arr = new Vector2[pelletCount];
-
-                for (int i = 0; i < pelletCount; i++)
-                {
-                    Vector2 center =
-                        (i % 2 == 0)
-                        ? Vector2.left * spreadSize
-                        : Vector2.right * spreadSize;
-
-                    arr[i] = center + Random.insideUnitCircle * innerSpread;
-                }
-
-                return arr;
-            }
-
-            default:
-            {
-                Vector2[] arr = new Vector2[pelletCount];
-
-                for (int i = 0; i < pelletCount; i++)
-                    arr[i] = Random.insideUnitCircle * spreadSize;
-
-                return arr;
-            }
-        }
-    }
-
-    void ShootRay(Vector3 dir)
-    {
-        if (Physics.Raycast(cam.transform.position, dir, out RaycastHit hit, range))
-        {
             float dmg = CalculateDamage(hit.distance);
-
-            Health hp = hit.transform.GetComponent<Health>();
-            if (hp != null)
-                hp.TakeDamage(dmg);
-
-            if (impactEffect != null)
-            {
-                Instantiate(
-                    impactEffect,
-                    hit.point,
-                    Quaternion.LookRotation(hit.normal)
-                );
-            }
+            ApplyDamage(hit.transform, dmg);
+        }
+        else
+        {
+            SpawnTracer(origin, origin + dir * data.range);
         }
     }
 
-    float CalculateDamage(float distance)
+    float CalculateDamage(float dist)
     {
-        if (distance <= falloffStart)
-            return damage;
+        if (dist <= data.falloffStart)
+            return data.damage;
 
-        float drop = (distance - falloffStart) * falloffRate;
-        return Mathf.Max(minDamage, damage - drop);
+        float drop = (dist - data.falloffStart) * data.falloffRate;
+        return Mathf.Max(data.minDamage, data.damage - drop);
+    }
+
+    void ApplyDamage(Transform t, float dmg)
+    {
+        if (t.TryGetComponent(out Health hp))
+            hp.TakeDamage(dmg);
+    }
+
+    void SpawnTracer(Vector3 start, Vector3 end)
+    {
+        if (!tracer) return;
+
+        ParticleSystem.EmitParams ep = new()
+        {
+            position = start,
+            velocity = (end - start).normalized * data.tracerSpeed
+        };
+
+        tracer.Emit(ep, 1);
+    }
+
+    void UpdateRecoil()
+    {
+        recoil = Vector2.SmoothDamp(recoil, Vector2.zero, ref recoilVel, 0.08f);
+
+        recoilPivot.localRotation = Quaternion.Euler(-recoil.y, recoil.x, 0);
     }
 
     IEnumerator Reload()
     {
         reloading = true;
-
-        if (ammoText)
-            ammoText.text = "Reloading...";
-
-        yield return new WaitForSeconds(reloadTime);
-
-        currentAmmo = maxAmmo;
+        yield return new WaitForSeconds(data.reloadTime);
+        ammo = data.magSize;
         reloading = false;
-
-        UpdateUI();
     }
 
-    void UpdateUI()
+    public int GetAmmo()
     {
-        if (ammoText)
-            ammoText.text = $"{currentAmmo} / {maxAmmo}";
+    return ammo;
     }
+
 }
