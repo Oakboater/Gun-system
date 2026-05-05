@@ -1,0 +1,89 @@
+using UnityEngine;
+using TMPro;
+using System.Collections.Generic;
+
+public class WeaponManager : MonoBehaviour
+{
+    [Header("UI")]
+    public TMP_Text ammoText;
+    public TMP_Text weaponNameText;
+
+    List<GameObject> weapons = new();
+    int index;
+    Gun currentGun;
+
+    void Awake()
+    {
+        // ONLY take children that actually have a Gun component
+        foreach (Transform child in transform)
+        {
+            if (child.GetComponent<Gun>() != null)
+            {
+                weapons.Add(child.gameObject);
+            }
+            else
+            {
+                Debug.LogWarning($"Skipping {child.name} (no Gun component)");
+            }
+        }
+    }
+
+    void Start()
+    {
+        if (weapons.Count == 0)
+        {
+            Debug.LogError("No valid weapons found under WeaponManager!");
+            return;
+        }
+
+        Equip(0);
+    }
+
+    void Update()
+    {
+        if (weapons.Count == 0) return;
+
+        if (Input.GetKeyDown(KeyCode.Alpha1)) Equip(0);
+        if (Input.GetKeyDown(KeyCode.Alpha2)) Equip(1);
+        if (Input.GetKeyDown(KeyCode.Alpha3)) Equip(2);
+
+        float scroll = Input.GetAxis("Mouse ScrollWheel");
+
+        if (scroll > 0f) Equip((index + 1) % weapons.Count);
+        if (scroll < 0f) Equip((index - 1 + weapons.Count) % weapons.Count);
+
+        UpdateUI();
+    }
+
+    void Equip(int i)
+    {
+        if (weapons.Count == 0) return;
+
+        i = Mathf.Clamp(i, 0, weapons.Count - 1);
+
+        for (int j = 0; j < weapons.Count; j++)
+            weapons[j].SetActive(false);
+
+        weapons[i].SetActive(true);
+        index = i;
+
+        currentGun = weapons[i].GetComponent<Gun>();
+
+        if (currentGun == null)
+        {
+            Debug.LogError($"Weapon {weapons[i].name} has no Gun script!");
+            return;
+        }
+
+        if (weaponNameText)
+            weaponNameText.text = currentGun.data.weaponName;
+    }
+
+    void UpdateUI()
+    {
+        if (currentGun == null) return;
+
+        if (ammoText)
+            ammoText.text = $"{currentGun.GetAmmo()} / {currentGun.data.magSize}";
+    }
+}
