@@ -1,0 +1,35 @@
+using UnityEngine;
+
+[CreateAssetMenu(fileName = "WeaponData", menuName = "FPS/Weapon")]
+public class WeaponData : ScriptableObject
+{
+    [Header("General")]
+    public string weaponName;
+    public float damage = 25f;
+    public float range = 100f;
+    public float fireRate = 10f;
+
+    public enum FireType { Auto, Semi, Shotgun }
+    public FireType fireType;
+
+    [Header("Ammo")]
+    public int magSize = 30;
+    public float reloadTime = 1.5f;
+
+    [Header("Shotgun")]
+    public int pellets = 8;
+    public float spread = 0.06f;
+    public float randomness = 0.01f;
+
+    [Header("Recoil")]
+    public float recoilX = 1.5f;
+    public float recoilY = 2f;
+
+    [Header("Falloff")]
+    public float falloffStart = 15f;
+    public float falloffRate = 1.2f;
+    public float minDamage = 5f;
+
+    [Header("VFX")]
+    public float tracerSpeed = 80f;
+}
